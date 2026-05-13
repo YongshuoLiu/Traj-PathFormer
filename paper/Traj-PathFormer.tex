@@ -1,0 +1,156 @@
+%%
+%% Copyright 2019-2024 Elsevier Ltd
+%%
+%% Version 2.4
+%%
+%% This file is part of the 'CAS Bundle'.
+%% --------------------------------------
+%%
+%% It may be distributed under the conditions of the LaTeX Project Public
+%% License, either version 1.2 of this license or (at your option) any
+%% later version.  The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.2 or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+%%
+%% The list of all files belonging to the 'CAS Bundle' is
+%% given in the file `manifest.txt'.
+%%
+%% Template article for cas-dc documentclass for
+%% double column output.
+
+
+%\documentclass[a4paper,fleqn,longmktitle]{cas-dc}
+
+
+\documentclass[a4paper,fleqn]{cas-dc}
+%\usepackage[authoryear,longnamesfirst]{natbib}
+%\usepackage[authoryear]{natbib}
+\usepackage[numbers]{natbib}
+\setlength{\mathindent}{0pt}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{caption}
+\usepackage{float}
+%\captionsetup[figure]{name={Fig.},labelsep=period}
+\captionsetup[figure]{labelfont={bf}, labelformat={default}, labelsep=period, name={Fig.}}
+%%%Author definitions
+\usepackage{xspace}
+\usepackage{etoolbox}
+\def\tsc#1{\csdef{#1}{\textsc{\lowercase{#1}}\xspace}}
+\tsc{WGM}
+\tsc{QE}
+\tsc{EP}
+\tsc{PMS}
+\tsc{BEC}
+\tsc{DE}
+%%%
+
+
+
+\begin{document}
+\let\WriteBookmarks\relax
+\def\floatpagepagefraction{1}
+\def\textpagefraction{.001}
+\shorttitle{}
+\shortauthors{J.K. Krishnan et~al.}
+
+\title [mode = title]{Traj-PathFormer: A Transformer-Based Framework for Multi-Source Ship Trajectory Prediction and Fusion Analysis}
+
+%\tnotemark[1,2]
+\tnotetext[1]{This document is the results of the research
+   project funded by the Application of remote collaborative computing of foreign medicinal biological resources OF Key R\&D program of Shandong Province under Grant 2018ASKJ01-05.}
+
+\affiliation[1]{organization={Faculty of Information Science and Technology, Ocean University of China},
+                city={Qingdao},
+                state={Shandong},
+                postcode={266004},
+                country={China}}
+
+\affiliation[2]{organization={Faculty of Science and Information Sciences, Qingdao Agricultural University},
+                city={Qingdao},
+                state={Shandong},
+                postcode={266100},
+                country={China}}
+
+\author[2]{Jiangnan Zhang}[style=chinese]
+\cormark[1]
+\ead{zjn@qau.edu.cn}
+\author[2]{Yongshuo Liu}[style=chinese]
+\ead{yongshuo@qau.edu.cn}
+\author[1]{Junyu Dong}[style=chinese]
+\cormark[2]
+\ead{JunyuDong@ouc.edu.cn}
+\cortext[cor1]{Corresponding author}
+\cortext[cor2]{Corresponding author}
+
+
+\begin{abstract}
+The rapid development of maritime Internet of Things (IoT) technologies has led to large-scale trajectory observations from heterogeneous monitoring systems, such as the Automatic Identification System (AIS), BeiDou Navigation Satellite System (BDS), and radar. However, real-world maritime trajectories are often irregularly sampled, noisy, partially missing, sparsely observed in local regions, and inconsistent across sources, which limits the reliability of single-source prediction and conventional interpolation-based preprocessing. To address these challenges, this paper proposes Traj-PathFormer, a Transformer-based framework for multi-source ship trajectory prediction and fusion analysis. The proposed model first converts heterogeneous trajectory observations into unified spatiotemporal patches through time-aware patch embedding. A local patch completion module then reconstructs both empty and sparsely observed historical regions by cross-attending to associated source trajectory patches, improving trajectory continuity without relying on rigid temporal interpolation or direct point-wise replacement. The completion module can use either one selected auxiliary trajectory or multiple auxiliary trajectories. When multiple auxiliary sources are selected, two local auxiliary patch sequences with a fixed length of three are jointly modeled through cross-attention before completing the target patch representation. This design is particularly useful when auxiliary trajectories are only weakly aligned or have lower local precision, because the model learns complementary motion evidence at the patch representation level rather than copying noisy observations into the target trajectory. Finally, a time-conditioned query decoder predicts future motion increments by explicitly incorporating future time intervals, step identities, and historical context. Experiments are conducted on a novel Multi-Source Ship Trajectory Dataset (MSTD) constructed from Bohai Bay in Shandong Province, which contains 2,107 complete six-hour trajectory groups from AIS, BDS, and radar systems.
+\end{abstract}
+
+\begin{graphicalabstract}
+
+\end{graphicalabstract}
+
+\begin{highlights}
+\item A Transformer-based trajectory prediction framework is proposed for irregular and partially missing multi-source maritime trajectories.
+\item A time-aware patch embedding module is designed to represent heterogeneous trajectory observations under non-uniform sampling intervals.
+\item A local cross-attention patch completion mechanism is introduced to recover empty or sparsely observed trajectory regions from one selected source or multiple weakly aligned sources.
+\item A time-conditioned future query decoder is developed to predict future motion increments under irregular forecasting intervals.
+\end{highlights}
+
+\begin{keywords}
+Intelligent marine transportation \sep Ship trajectory prediction
+\sep Automatic Identification System \sep Multi-source data fusion \sep Irregular time series \sep Transformer
+\end{keywords}
+
+\makeatletter\def\Hy@Warning#1{}\makeatother
+\maketitle{}
+
+\section{Introduction}
+
+Multi-source ship trajectory data are collected from heterogeneous maritime monitoring systems, including the Automatic Identification System (AIS), BeiDou Navigation Satellite System (BDS), and shore-based radar. AIS provides widely available vessel identity and navigation reports, BDS contributes high-precision positioning and communication capabilities in the Asia-Pacific region, and radar offers active sensing observations that are particularly valuable in near-shore areas. In this study, a novel Multi-Source Ship Trajectory Dataset (MSTD) is constructed from Bohai Bay in Shandong Province using trajectory data from these three maritime monitoring systems. The curated dataset contains 2,107 complete six-hour trajectory groups, and each group contains irregular trajectory points from AIS, BDS, and radar. These sources are complementary: AIS and BDS provide rich navigation attributes, while radar can compensate for blind areas, missing reports, and unstable communication conditions. However, there are significant differences in the continuity and accuracy of the three sources. Their data formats, sampling intervals, spatial accuracy, and noise characteristics differ substantially, making direct multi-source trajectory fusion and prediction challenging.
+
+Ship trajectories record vessel positions and navigation states over time, reflecting both individual motion dynamics and regional maritime traffic patterns. Most existing trajectory prediction studies assume regularly sampled and fully observed sequences. In practice, real maritime trajectories are irregular time series with non-uniform time intervals, missing segments, sparse local regions, duplicated records, and abnormal motion jumps. Conventional preprocessing methods often resample trajectories onto a fixed temporal grid through interpolation. Although this simplifies model input, it may distort the actual sailing process and introduce artificial motion patterns, especially when observations are sparse or interrupted. Moreover, direct completion from another source is not always reliable. Even for associated AIS, BDS, and radar trajectories, different sources may only be similar at the motion-pattern level while differing substantially in coordinates, sampling times, continuity, and local precision. Therefore, simply replacing a missing segment with points from another source can inject biased or temporally inconsistent observations into the target trajectory. Single-source prediction and direct filling both fail to fully exploit complementary information across sensors, limiting robustness under missing, sparse, or noisy observations.
+
+To address these limitations, we propose Traj-PathFormer, a Transformer-based framework for multi-source ship trajectory prediction and fusion analysis. The model represents historical trajectories as time-aware patches, enabling local trajectory segments with irregular sampling intervals to be encoded in a unified form. To handle incomplete historical observations, a local patch completion module reconstructs latent representations for both fully missing patches and sparsely observed patches by cross-attending to associated source trajectory context. The completion source is flexible: the model can select a single auxiliary trajectory when one source is sufficiently reliable, or select multiple auxiliary trajectories when complementary evidence from different monitoring systems is needed. In the multi-source case, each selected auxiliary trajectory provides a local patch sequence around the incomplete target region, and two such auxiliary sequences are fused through cross-attention with a fixed local length of three patches, which will be empirically validated in later experiments. Instead of treating auxiliary trajectories as point-wise replacement targets, the proposed module uses them as complementary evidence and learns how much information should be transferred into the target trajectory representation. This allows the model to benefit from low-precision or weakly aligned multi-source data while avoiding the artifacts introduced by rigid interpolation or direct copying. For future prediction, a time-conditioned query decoder constructs one query for each future step from the target interval, step identity, and historical anchor state, allowing the model to explicitly adapt to irregular forecasting intervals. This design preserves local trajectory continuity and supports multi-source completion under incomplete, sparse, or noisy observations.
+
+The main contributions of this paper are summarized as follows:
+
+\begin{enumerate}
+    \item We construct a novel Multi-Source Ship Trajectory Dataset (MSTD) from Bohai Bay in Shandong Province, containing 2,107 complete six-hour trajectory groups from AIS, BDS, and radar systems.
+    \item We propose Traj-PathFormer, a Transformer-based framework for irregular and partially missing multi-source ship trajectory prediction without requiring fixed-interval interpolation.
+    \item We design a time-aware patch embedding and temporal patch attention mechanism to capture local and contextual dependencies under non-uniform sampling intervals.
+    \item We introduce a flexible local cross-attention patch completion module that can use one auxiliary trajectory or multiple auxiliary trajectories to reconstruct empty and sparsely observed target patches under incomplete historical observations.
+\end{enumerate}
+
+\section{Related Work}
+
+Early maritime target tracking methods mainly rely on dynamical equations and statistical assumptions, such as Kalman filtering, Joint Probabilistic Data Association (JPDA), and Multiple Hypothesis Tracking (MHT). These methods recursively estimate target states by incorporating multi-source trajectory observations into unified motion models. They are effective when the underlying motion assumptions are reliable and the observation noise can be accurately characterized. However, their performance is highly sensitive to predefined state equations, parameter settings, and association rules. In complex maritime environments, vessel maneuvers, sparse observations, sensor blind zones, and inconsistent sampling intervals make these assumptions difficult to satisfy, which limits the robustness of traditional rule-based methods.
+
+Deep learning approaches, particularly recurrent neural networks (RNNs), long short-term memory (LSTM) networks, gated recurrent units (GRUs), and graph neural networks (GNNs), have become important research directions for ship trajectory analysis. These models can learn nonlinear motion patterns from historical trajectories and capture temporal dependencies that are difficult to describe with hand-crafted equations. In multi-source trajectory fusion, deep learning models are commonly used to integrate heterogeneous observations and improve target tracking, trajectory completion, and behavior pattern recognition. For example, Bai et al. [23] fused AIS and radar data and extracted trajectory features using a Transformer-based model, enabling continuous trajectory monitoring and behavior pattern analysis. Zheng et al. [24] utilized multi-source trajectory data from AIS, GPS, and ARPA radar systems, and enhanced trajectory completeness through spatiotemporal feature fusion before applying a Bi-LSTM network for motion pattern learning. Lin et al. [25] combined CNN-based spatial feature extraction with Transformer-based long-range dependency modeling to fuse ocean current data with historical trajectories. Ying et al. [26] integrated AIS and radar observations to supplement trajectories in AIS blind spots and improved a Bi-GRU model with Bayesian optimization for efficient navigation trajectory analysis.
+
+These deep learning methods have significantly improved the efficiency and accuracy of ship trajectory prediction and fusion analysis [27,28]. Nevertheless, many of them still rely on uniformly sampled, fully observed, or single-source trajectory sequences. Real multi-source maritime trajectories usually differ in sampling frequency, positioning accuracy, time synchronization, and missing-data patterns. In addition, associated trajectories from AIS, BDS, and radar are not guaranteed to be point-wise aligned. They may describe similar motion tendencies while having large numerical offsets, non-overlapping timestamps, different continuity levels, or source-specific measurement errors. As a result, direct application of existing models often requires interpolation, resampling, or point-wise replacement, which may introduce artificial motion patterns and weaken the ability to exploit complementary information across sources.
+
+The Transformer architecture, originally proposed by Vaswani et al., introduces self-attention to model dependencies between arbitrary positions in a sequence [32]. Multi-head attention further enables the model to attend to different feature subspaces, making Transformers suitable for long-sequence modeling and multi-dimensional feature integration [33]. Compared with recurrent architectures, Transformers alleviate gradient-vanishing issues and support more efficient parallel computation, which is valuable for long maritime trajectory sequences [34,35,36]. In multi-source ship trajectory fusion, trajectory observations can be represented as heterogeneous vector sequences containing latitude, longitude, speed, heading, time interval, and source-specific attributes [37,38]. By jointly modeling global spatiotemporal dependencies and local interaction patterns, Transformer-based models can improve prediction, behavior analysis, and anomaly detection in complex maritime scenarios [39,40].
+
+Despite these advantages, most existing Transformer-based trajectory models still lack explicit mechanisms for irregular sampling, local trajectory patch modeling, sparse-region recovery, and missing-segment completion [41,42]. They may encode the order of observations but fail to fully represent the true elapsed time between observations or use weakly aligned multi-source context to complete incomplete historical segments. These limitations motivate the proposed Traj-PathFormer, which combines time-aware patch embedding, temporally biased patch attention, local cross-attention completion, and a time-conditioned future query decoder for robust multi-source ship trajectory prediction. In this framework, AIS, BDS, and radar trajectories are not assumed to provide accurate replacement points for each other. Instead, they provide complementary patch-level motion cues. The completion module can attend to one selected source or jointly attend to two local auxiliary patch sequences, allowing it to transfer useful information while suppressing inconsistent or low-precision observations.
+
+\input{methodology_en.tex}
+
+\input{experiments_en.tex}
+% To print the credit authorship contribution details
+\printcredits
+%% Loading bibliography style file
+%\bibliographystyle{model1-num-names}
+\bibliographystyle{cas-model2-names}
+
+% Loading bibliography database
+\bibliography{cas-refs}
+
+
+%\vskip3pt
+
+\end{document}

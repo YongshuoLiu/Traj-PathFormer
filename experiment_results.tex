@@ -1,0 +1,72 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+
+\title{Experiment Results}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Single-AIS Trajectory Forecasting Comparison}
+
+Table~\ref{tab:single-ais-main} summarizes the current test-set comparison on the traj\_a-only single-AIS setting.
+The metrics \texttt{Avg L2}, \texttt{Avg MSE}, and \texttt{Avg DTW} are computed after reconstructing predictions back to latitude/longitude space.
+Lower is better for all reported metrics.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Test-set comparison on the traj\_a-only single-AIS setting.}
+    \label{tab:single-ais-main}
+    \begin{tabular}{lccccccc}
+        \toprule
+        Model & Epochs & Test Loss & Pos MAE & Final MAE & Avg L2 & Avg MSE & Avg DTW \\
+        \midrule
+        Ours   & 50 & \textbf{0.085999} & 147.2423 & \textbf{233.5597} & \textbf{0.002117} & \textbf{0.000006039} & \textbf{0.020905} \\
+        AGDN   & 20 & 0.104537 & 162.5801 & 294.1568 & 0.002403 & 0.000006808 & 0.024231 \\
+        TLSTM  & 20 & 0.087601 & \textbf{145.7649} & 240.4829 & 0.002154 & 0.000006595 & 0.021198 \\
+        TPatch & 20 & 0.088869 & 149.7027 & 242.8796 & 0.002210 & 0.000006288 & 0.021267 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\paragraph{Current observation.}
+Under the current setting, our model achieves the best overall performance on Test Loss, Final MAE, Avg L2, and Avg DTW.
+TLSTM is competitive on Pos MAE, but remains worse on the trajectory-level and endpoint-oriented metrics.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{workdir_singleais_traj_a/experiments/patch_nomissing_traj_a_singleais_gpu2_lr1e4_e50_slide1_20260406_181745/visualizations/test_ten_short_samples.png}
+    \caption{Visualization of 10 test samples. Each panel shows the last 6 observed input steps, together with 6-step ground-truth future trajectory and 6-step predicted trajectory.}
+    \label{fig:single-ais-ten-samples}
+\end{figure}
+
+\section{Mask Robustness Evaluation}
+
+In this experiment, the input history is randomly masked from 10\% to 90\% with a step size of 10\%.
+For our model, each masked time step is replaced by a temporally nearby observation from \texttt{traj\_b}.
+For AGDN, TLSTM, and TPatch, masked time steps are directly filled with zeros.
+The reported \texttt{L2}, \texttt{MSE}, and \texttt{DTW} values are all computed in reconstructed latitude/longitude space.
+
+\input{workdir_singleais_traj_a/experiments/patch_nomissing_traj_a_singleais_gpu2_lr1e4_e50_slide1_20260406_181745/mask_robustness/mask_robustness_results.tex}
+
+\section{Planned Experiments}
+
+The following experiments are reserved for future completion:
+
+\begin{itemize}
+    \item Ablation study on the \texttt{traj\_b}-based completion strategy
+    \item Influence of multi-source AIS data on masked-trajectory forecasting performance
+    \item Comparison under different masking patterns (random mask, block mask, tail mask)
+    \item Effect of different training data sizes
+    \item Stability across multiple random seeds
+    \item Error analysis on hard trajectory cases and failure examples
+\end{itemize}
+
+\end{document}

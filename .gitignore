@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local editor and OS metadata
+.DS_Store
+.idea/
+.vscode/
+
+# Local data and generated caches
+data/**/*.csv
+data/**/*.jsonl
+data/**/*.npz
+data/**/*.pkl
+data/**/*.pt
+data/**/*.pth
+data/**/*.ckpt
+
+# Training outputs
+workdir*/
+experiments/
+launch_logs/
+logs/
+*.log
+*.out
+*.pid
+*.pt
+*.pth
+*.ckpt
+
+# Generated reports that should be rebuilt from experiments
+*_results.csv
+*_results.json
+quick_suite_summary.json
+root_summary.json
+summary.json
+train_log.jsonl
+stdout.jsonl

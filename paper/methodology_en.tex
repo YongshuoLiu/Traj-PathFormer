@@ -1,0 +1,132 @@
+% This section is intended to be included via \input{} in a main paper file.
+% It assumes standard math packages such as amsmath, amssymb, and bm are already loaded.
+
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Overview}
+\label{subsec:overview}
+
+Given a historical trajectory sequence $\mathcal{X}=\{\bm{x}_t\}_{t=1}^{L}$, where $\bm{x}_t \in \mathbb{R}^{C}$, and a target future interval sequence $\bm{\delta}=\{\delta_h\}_{h=1}^{H}$, the objective is to predict normalized future motion increments $\hat{\mathcal{Y}}^{\mathrm{norm}}=\{\hat{\bm{y}}_h^{\mathrm{norm}}\}_{h=1}^{H}$ and reconstruct future positions $\hat{\mathcal{P}}=\{\hat{\bm{p}}_h\}_{h=1}^{H}$. To this end, we adopt a hierarchical \emph{patch encoder + time-conditioned query decoder}. The encoder aggregates point-wise observations into local patch tokens and contextualizes them through patch-level self-attention. The decoder constructs one query per future step from the target interval, the step index, and a historical anchor state, and retrieves relevant context through cross-attention. This formulation is well suited to irregularly sampled trajectories because decoding is explicitly conditioned on the target temporal spacing.
+
+\subsection{Patch-wise Hierarchical History Encoder}
+\label{subsec:encoder}
+
+We partition the historical sequence into $N$ patches, each containing $P$ observations, such that $L=N\times P$. If the input length differs from $N\times P$, the sequence is padded or truncated accordingly. For each point, the interval channel is accumulated to obtain a timestamp $\tau_{n,p}$, which is then mapped to a learnable temporal embedding $\phi_t(\tau_{n,p})$. The resulting point representation for the $p$-th point in the $n$-th patch is
+\begin{equation}
+\bm{z}_{n,p} = [\bm{x}_{n,p}; \phi_t(\tau_{n,p})].
+\end{equation}
+Within each patch, point-level multi-head self-attention and a feed-forward block are applied, followed by masked mean pooling to obtain a local patch token $\bm{h}_n^{\mathrm{loc}} \in \mathbb{R}^{d}$. If a patch contains at least one valid point, a learnable existence bias is added to distinguish valid patches from empty ones.
+
+Local patch tokens alone are insufficient to capture long-range motion dependencies. We therefore perform contextual encoding over the patch sequence. At layer $\ell$, patch-level attention is augmented with an explicit temporal-distance bias,
+\begin{equation}
+b_{ij} = \log \left(\exp\left(-\frac{|i-j|\Delta_p}{\tau}\right)+\epsilon\right),
+\end{equation}
+which biases attention toward temporally nearby patches while preserving global interaction. Given input tokens $\{\bm{h}_n^{(\ell-1)}\}_{n=1}^{N}$, the contextualized representation is updated by a temporally biased patch-attention block followed by a standard Transformer encoder block:
+\begin{align}
+\bar{\bm{h}}_i^{(\ell)} &= \bm{h}_i^{(\ell-1)} + \sum_{j=1}^{N}\mathrm{Attn}_{ij}^{(\ell)}\bm{v}_j^{(\ell)}, \\
+\bm{h}_i^{(\ell)} &= \bar{\bm{h}}_i^{(\ell)} + \mathrm{Transformer}^{(\ell)}\!\left(\mathrm{PE}(\bar{\bm{h}}_i^{(\ell)})\right),
+\end{align}
+where $\mathrm{Attn}_{ij}^{(\ell)}$ is computed from the standard scaled dot-product attention score with additive bias $b_{ij}$. After stacking $M$ such layers, we obtain the historical memory $\mathcal{H}=\{\bm{h}_1^{(M)},\dots,\bm{h}_N^{(M)}\}$.
+
+\subsection{Time-Conditioned Future Query Decoder}
+\label{subsec:decoder}
+
+To decode the future trajectory, we first construct a global historical anchor from the last valid observation $\bm{x}_{\mathrm{last}}$ and the contextual token of the last valid patch $\bm{h}_{\mathrm{last}}^{(M)}$:
+\begin{equation}
+\bm{g} = \psi_g([\bm{x}_{\mathrm{last}};\bm{h}_{\mathrm{last}}^{(M)}]),
+\end{equation}
+where $\psi_g(\cdot)$ is an MLP. This anchor summarizes the current observation and the compressed historical context. For the $h$-th future step, the query is constructed from three signals: the target interval $\delta_h$, the step identity $h$, and the global anchor $\bm{g}$. Specifically, the interval is encoded using a logarithmically compressed temporal embedding $\bm{d}_h=\phi_f(\log(1+\delta_h))$, and the step identity is represented by a learnable embedding $\bm{s}_h=\mathrm{Emb}(h)$. The resulting future query is
+\begin{equation}
+\bm{q}_h = \psi_q([\bm{g};\bm{d}_h;\bm{s}_h]).
+\end{equation}
+The three components play distinct roles. The interval embedding $\bm{d}_h$ specifies the target temporal spacing and therefore encodes \emph{when} the prediction should be made. The step embedding $\bm{s}_h$ disambiguates future steps with similar intervals and encodes \emph{which} prediction step is being decoded. The global anchor $\bm{g}$ carries the current motion state and compressed trajectory context, thereby encoding \emph{from what state} the future evolution should be extrapolated. Their combination yields step-specific queries that remain temporally aware, order-aware, and state-aware.
+
+Given the query sequence $\mathcal{Q}=\{\bm{q}_1,\dots,\bm{q}_H\}$ and the historical memory $\mathcal{H}$, we perform cross-attention to retrieve step-specific historical evidence:
+\begin{equation}
+\tilde{\bm{c}}_h = \mathrm{LN}\!\left(\mathrm{MHA}(\bm{q}_h,\mathcal{H},\mathcal{H}) + \bm{q}_h\right).
+\end{equation}
+The normalized future motion increment is then predicted by a step decoder,
+\begin{equation}
+\hat{\bm{y}}_h^{\mathrm{norm}} = \psi_d([\tilde{\bm{c}}_h;\bm{q}_h;\bm{x}_{\mathrm{last}};\bm{d}_h]),
+\end{equation}
+which combines retrieved historical evidence, target temporal semantics, and the current observed state within a single decoding step. Relative to a single global regression head, this query-based strategy is better suited to irregular temporal intervals because each future step is conditioned on its own target spacing.
+
+\subsection{Trajectory Reconstruction and Training Objective}
+\label{subsec:objective}
+
+The network predicts normalized motion increments, which are mapped back to physical space by an element-wise motion scale $\bm{s}_m$. Under velocity modeling, the displacement at step $h$ is $\Delta \hat{\bm{p}}_h=\hat{\bm{y}}_h\cdot\delta_h$; under displacement modeling, it is directly $\Delta \hat{\bm{p}}_h=\hat{\bm{y}}_h$. Future positions are reconstructed by cumulative summation,
+\begin{equation}
+\hat{\bm{p}}_h = \sum_{r=1}^{h}\Delta \hat{\bm{p}}_r,
+\end{equation}
+and normalized by the position scale $\bm{s}_p$ when trajectory-space supervision is applied.
+
+Training jointly optimizes three objectives: per-step motion accuracy, full-trajectory reconstruction, and endpoint accuracy. Let $\ell(\cdot,\cdot)$ denote either Smooth L1 or MSE. The overall forecasting objective is
+\begin{equation}
+\mathcal{L}=
+\lambda_m \mathcal{L}_{\mathrm{motion}}+
+\lambda_t \mathcal{L}_{\mathrm{traj}}+
+\lambda_f \mathcal{L}_{\mathrm{final}},
+\end{equation}
+where
+\begin{equation}
+\mathcal{L}_{\mathrm{motion}}=\frac{1}{H}\sum_{h=1}^{H}\ell(\hat{\bm{y}}_h^{\mathrm{norm}},\bm{y}_h^{\mathrm{norm}}), \quad
+\mathcal{L}_{\mathrm{traj}}=\frac{1}{H}\sum_{h=1}^{H}\ell(\hat{\bm{p}}_h^{\mathrm{norm}},\bm{p}_h^{\mathrm{norm}}),
+\end{equation}
+and $\mathcal{L}_{\mathrm{final}}=\ell(\hat{\bm{p}}_H^{\mathrm{norm}},\bm{p}_H^{\mathrm{norm}})$. This objective enforces local motion fidelity, global trajectory consistency, and accurate endpoint prediction.
+
+\subsection{Local Patch Completion via Time-Conditioned Queries}
+\label{subsec:completion}
+
+Beyond future forecasting, we also consider historical patch completion. Let the $m$-th patch be missing or sparsely observed. Rather than recovering it from the entire history, completion is restricted to a fixed local chunk of three neighboring patches. The completion source is selectable. If only one auxiliary trajectory is selected, the local memory is constructed from its three-patch sequence around the target incomplete region, denoted by $\mathcal{N}(m)=\{j_1,j_2,j_3\}$, with corresponding local memory $\mathcal{H}_m^{\mathrm{loc}}=\{\bm{h}_{j_1}^{(M)},\bm{h}_{j_2}^{(M)},\bm{h}_{j_3}^{(M)}\}$. If multiple auxiliary trajectories are selected, two auxiliary local patch sequences are extracted with the same length of three and are first fused by cross-attention before forming the memory used to complete the target patch. This choice imposes an explicit local continuity prior: for short-range trajectory gaps, nearby motion patterns are typically more informative than distant context. The fixed three-patch length is treated as a local design choice and will be validated in the ablation experiments.
+
+To complete the missing or sparse patch, we construct a time-conditioned query that encodes its temporal location, positional identity, and local neighborhood state. Let $\tau_m^{c}$ be the center timestamp of the target patch, let $\bm{u}_m=\mathrm{Emb}(m)$ be its patch-index embedding, let $\bm{h}_m^{-}$ and $\bm{h}_m^{+}$ denote the closest visible patch representations on the left and right, and let $\bar{\bm{h}}_m$ be the average-pooled summary of the selected local three-patch chunk. The completion query is defined as
+\begin{equation}
+\bm{q}_m^{\mathrm{comp}}=
+\psi_c([\phi_c(\tau_m^{c});\bm{u}_m;\bm{h}_m^{-};\bm{h}_m^{+};\bar{\bm{h}}_m]).
+\end{equation}
+We then recover the latent representation of the target patch via local cross-attention,
+\begin{equation}
+\alpha_{m,i}=
+\frac{
+\exp\left(
+(\bm{q}_m^{\mathrm{comp}}\bm{W}_Q)(\bm{h}_{j_i}^{(M)}\bm{W}_K)^\top/\sqrt{d}
+\right)
+}{
+\sum_{r=1}^{3}
+\exp\left(
+(\bm{q}_m^{\mathrm{comp}}\bm{W}_Q)(\bm{h}_{j_r}^{(M)}\bm{W}_K)^\top/\sqrt{d}
+\right)
+}, \qquad i\in\{1,2,3\},
+\end{equation}
+\begin{equation}
+\bm{r}_m=\sum_{i=1}^{3}\alpha_{m,i}(\bm{h}_{j_i}^{(M)}\bm{W}_V), \qquad
+\hat{\bm{h}}_m^{\mathrm{comp}}=
+\mathrm{LN}\!\left(\bm{r}_m+\bm{q}_m^{\mathrm{comp}}\right).
+\end{equation}
+This operation performs query-guided fusion over the selected local patch memory: the completion query assigns attention weights to the local chunk and aggregates the corresponding value vectors into a completed patch token. For single-source completion, the memory comes from one auxiliary trajectory. For multi-source completion, two auxiliary three-patch sequences are first cross-attended to each other so that source consistency and source reliability can be compared before the target query retrieves information from the fused memory. Completion is therefore formulated as local conditional retrieval and multi-source evidence selection rather than direct regression or point-wise copying.
+
+Completion is supervised at both the patch and point levels. Let $\bm{h}_m^{\star}$ be the target patch representation obtained from the fully observed input. The patch-level completion loss is
+\begin{equation}
+\mathcal{L}_{\mathrm{comp\_patch}}=\ell_c(\hat{\bm{h}}_m^{\mathrm{comp}},\bm{h}_m^{\star}).
+\end{equation}
+To recover fine-grained points within the patch, we use a point decoder conditioned on the completed patch token and relative temporal encodings:
+\begin{equation}
+\hat{\bm{x}}_{m,p}=\psi_p([\hat{\bm{h}}_m^{\mathrm{comp}};\phi_p(\tau_{m,p})]), \qquad p=1,\dots,P.
+\end{equation}
+The corresponding point-level reconstruction loss is
+\begin{equation}
+\mathcal{L}_{\mathrm{comp\_point}}=\frac{1}{P}\sum_{p=1}^{P}\ell_p(\hat{\bm{x}}_{m,p},\bm{x}_{m,p}^{\star}).
+\end{equation}
+The completion branch is optimized by
+\begin{equation}
+\mathcal{L}_{\mathrm{completion}}=
+\lambda_{\mathrm{cp}}\mathcal{L}_{\mathrm{comp\_patch}}+
+\lambda_{\mathrm{pt}}\mathcal{L}_{\mathrm{comp\_point}},
+\end{equation}
+and can be jointly trained with forecasting via
+\begin{equation}
+\mathcal{L}_{\mathrm{all}}=\mathcal{L}+\lambda_{\mathrm{comp}}\mathcal{L}_{\mathrm{completion}}.
+\end{equation}
+
+Forecasting and completion are formulated within the same time-conditioned query and cross-attention framework, but differ in the scope of the attended context. Forecasting uses the global historical memory for long-range extrapolation, whereas completion is restricted to one or more three-patch local auxiliary sequences to enforce short-range smoothness and structural consistency. This shared formulation unifies future prediction and missing-history recovery while preserving task-specific inductive biases, and allows the model to switch between single-source completion and multi-source cross-attention completion according to the available auxiliary trajectories.
