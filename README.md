@@ -153,8 +153,15 @@ Training writes checkpoints, JSON logs, and summaries under the configured
 Keep those artifacts locally or publish them separately when needed for
 reproducibility.
 
-## Notes
+## License
 
-This repository is organized for research reproducibility. It intentionally
-keeps source code, documentation, and manuscript assets in Git while leaving
-large datasets and experiment artifacts outside the repository.
+Copyright (c) 2026 Yuting Song
+
+All rights reserved.
+
+This repository is publicly visible for academic review and reference only.
+
+No permission is granted to copy, reproduce, modify, distribute, sublicense, publish,
+or use the source code, dataset, documentation, models, or any part of this repository
+for commercial or non-commercial purposes without explicit written permission from
+the copyright holder.
