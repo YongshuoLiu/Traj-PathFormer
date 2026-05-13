@@ -25,8 +25,7 @@ are intentionally excluded from version control.
 
 ```text
 .
-├── models/                                  # Traj-PathFormer and baseline models
-├── paper/                                   # Manuscript notes and figures
+├── models/                                  # Traj-PathFormer and baseline 
 ├── scripts/                                 # Utility scripts for analysis/figures
 ├── preprocess_motion_data.py                # Raw AIS JSONL to motion-target NPZ data
 ├── train_ours_singletraj_noslide.py         # Single-trajectory Traj-PathFormer training
